@@ -35,6 +35,7 @@ d_seg segment
     right_count db 0
     tick_count dw 0
     last_sec db 0 ; 上一秒
+    pos dw 0
     ; key set
     left_key equ 4Bh
     right_key equ 4Dh
@@ -102,7 +103,10 @@ output_char:
     pop si
     pop bx
     cmp si, bx
-    jb another_line
+    ja close_file
+    inc pos
+    jmp another_line
+close_file:
     mov bx, handle
     mov ah, 3eh
     int 21h ; close file
@@ -141,33 +145,46 @@ number2ascii proc near ; number -> AX
 number2ascii endp   
 
 stat proc near
+    push ax
     mov al, right_count
     mov al, 0
     mov right_count, al
     push bx
     push cx
     push si
+   
+    push dx
+    mov dx, pos
+    mov al, 40
+    mul dl
+    mov dx, ax
+
     mov bx, 0
     mov cx, 40;si
 calc:
-    mov si, offset buf
-    add si, bx
-    mov al, [si]
-    mov si, offset ibuf
-    add si, bx
-    mov ah, [si]
+    ;mov si, offset buf
+    mov si, bx
+    add si, dx
+    mov al, buf[si]
+    ;mov si, offset ibuf
+    mov si, bx
+    add si, dx
+    mov ah, ibuf[si]
     inc bx
     cmp ah, al
     jne next_loop
-    mov al, right_count
-    inc al
-    mov right_count, al
+    inc right_count
+    ;mov al, right_count
+    ;inc al
+    ;mov right_count, al
 next_loop:
     inc si    
     loop calc
+    pop dx
     pop si
     pop cx
     pop bx
+    pop ax
     ret
 stat endp
 
@@ -192,12 +209,6 @@ print_count proc near
     pop bx
     ret
 print_count endp 
-
-print_time proc near
-    push bx
-    push ax
-    ret
-print_time endp
     
 input proc near
     gotoxy 0301h
@@ -277,6 +288,14 @@ tick_chk:
     jz delete
     
     mov si, bx
+    push ax
+    push cx
+    mov cx, pos
+    mov al, 40
+    mul cl
+    add si, ax
+    pop cx
+    pop ax
     ; si 
     mov dl, buf[si]
     push cx
@@ -308,6 +327,7 @@ next:
     int 10h 
     pop bx	  
     pop cx
+    
     mov ibuf[bx], al
     inc bx
 
