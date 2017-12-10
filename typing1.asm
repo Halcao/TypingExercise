@@ -328,7 +328,8 @@ next:
     pop bx	  
     pop cx
     
-    mov ibuf[bx], al
+    ;mov ibuf[bx], al
+    mov ibuf[si], al
     inc bx
 
     cmp bx, 40
@@ -354,9 +355,11 @@ moveright:
     gotoxy dx
     jmp again
 delete:
-    mov si, bx
-    dec si
+    ;mov si, bx
+    ;dec si
+    ;mov ibuf[si], 0
     mov ibuf[si], 0
+    dec si
     ;mov si, bx
     ;dec si
 
