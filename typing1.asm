@@ -65,7 +65,7 @@ start proc far
     int 21h ; file 255 bytes -> buf
     jc open_error ; if failed
     mov bx, ax ; actual character count
-    mov buf[bx], '$'
+    ;mov buf[bx], '$'
     
     mov si, 0
  another_line:
@@ -78,6 +78,9 @@ start proc far
     mov si, 0
     mov cx, 40
     mov ah, 0
+    mov second, 0
+    mov minute, 0
+    mov hour, 0
 mem_clear:
     mov ibuf[si], ah
     inc si
@@ -103,7 +106,7 @@ output_char:
     pop si
     pop bx
     cmp si, bx
-    ja close_file
+    jnb close_file
     inc pos
     jmp another_line
 close_file:
@@ -200,7 +203,7 @@ print_count proc near
     gotoxy 0501h
     call number2ascii
     putchar '/'
-    putchar '3'
+    putchar '4'
     putchar '0'
     gotoxy dx
     pop dx
@@ -305,21 +308,20 @@ tick_chk:
     ;mov dl, right_count
     ;inc dl
     ;mov right_count, dl
-    mov bl, 07h
+    mov bl, 0ah;07h
     ;mov bl, 0ah ; green color
     
     ;putchar al
     ; set color
     jmp next
+j_again:
+    jmp again
+
 wrongchar:
-    mov bl, 0ah ; red color  07: orig
+    mov bl, 04h ; red color  07: orig
     ;mov bl, 0ch
     putchar 07h
     ; ring alarm
-    cmp bl, 0ah
-    jz next
-j_again:
-    jmp again
 next:
     ;push cx ;
     mov cx, 1    
@@ -411,16 +413,15 @@ get_time:
 	mov last_sec, dh
 	inc second
 	mov al, second
-	cmp ax, 60
-	jne output_time
+	cmp al, 60
+	jb output_time
 	mov second, 0
 	inc minute
 	mov al, minute
-	cmp ax, 60
+	cmp al, 60
 	jne output_time
 	mov minute, 0
-	; todo hour
-    ;inc hour
+    inc hour
 output_time:
 	mov dh, 06
 	mov dl, 01
@@ -428,16 +429,12 @@ output_time:
 	mov al, hour   ;小时
     mov number, al
     call number2ascii 
-	mov ah, 2
-	mov dl, ':'
-	int 21h
+    putchar ':'
 
 	mov al, minute    ;分钟
     mov number, al
     call number2ascii 
-	mov ah, 2
-	mov dl, ':'
-	int 21h
+    putchar ':'
 
 	mov al, second     ;秒
     mov number, al
