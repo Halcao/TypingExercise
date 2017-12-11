@@ -23,9 +23,10 @@ putchar macro char
 	    
 d_seg segment
     filepath db '.\article.txt', 0 ; filename
-    buf db 256 dup(0) ; file buffer
-    ibuf db 256 dup(0) ; input buffer
+    buf db 1024 dup(0) ; file buffer
+    ibuf db 1024 dup(1) ; input buffer
     err_msg db 0ah, 'cannot open file!', '$' ; error message
+    bye_msg db 0ah, 'Bye!', '$'
     handle dw ? ; file id
     number db 0
     hour db 0
@@ -59,7 +60,7 @@ start proc far
     jc open_error ; if failed
     mov handle, ax
     mov bx, ax
-    mov cx, 200
+    mov cx, 240
     mov dx, offset buf
     mov ah, 3fh
     int 21h ; file 255 bytes -> buf
@@ -90,9 +91,6 @@ mem_clear:
     pop cx
 
     gotoxy 0201h
-    ;mov dx, offset buf
-    ;mov ah, 09h
-    ;int 21h
     mov cx, 40
 output_char:
     mov dl, buf[si]
@@ -115,14 +113,11 @@ close_file:
     int 21h ; close file
 ;    jc end1 ; if error
     jc open_error ; if error
-    jmp end1
+    mov dx, offset bye_msg
+    jmp end_all
 open_error:
     mov dx, offset err_msg
-    mov ah, 09h
-    int 21h
-end1:
-    mov ah, 4ch
-    int 21h
+    call end_all
     ret
   
 number2ascii proc near ; number -> AX 
@@ -253,27 +248,6 @@ key_chk:
     jnz get_key
     ;detect time
     jmp key_chk
-
-    jmp tick_chk
-tick_chk:
-    push bx
-    mov ah, 00h
-    int 1ah
-    mov bx, tick_count
-    sub dx, bx
-    pop bx
-    cmp dx, 18
-    jb key_chk
-    mov tick_count, dx
-    mov al, right_count
-    inc al
-    mov right_count, al
-    call print_count
-    jmp key_chk
-    ;jmp again
-
-    ;mov ah, 0 ; input
-    ;int 16h   
  get_key:
 ;    gotoxy 
     mov ah, 0
@@ -281,6 +255,7 @@ tick_chk:
     ; action key
     cmp al, esc_key
     jnz cmp_next
+    mov dx, offset bye_msg
     call end_all
  cmp_next:
     cmp ah, left_key
@@ -305,22 +280,22 @@ tick_chk:
     push bx
     cmp al, dl
     jnz wrongchar
-    ;mov dl, right_count
-    ;inc dl
-    ;mov right_count, dl
-    mov bl, 0ah;07h
-    ;mov bl, 0ah ; green color
-    
-    ;putchar al
-    ; set color
+    mov bl, 0ah ; green
     jmp next
 j_again:
     jmp again
 
 wrongchar:
-    mov bl, 04h ; red color  07: orig
-    ;mov bl, 0ch
-    putchar 07h
+    mov bl, 04h ; red color
+    call music
+;  push cx 
+;    mov cx, 0ffh
+;ring:
+;    putchar 07h
+;    loop ring
+;    pop cx
+
+    ;call alarm
     ; ring alarm
 next:
     ;push cx ;
@@ -380,26 +355,67 @@ delete:
     ret
 input endp 
 
-sound proc
-	push ax
-	push cx
-    in al, 61h   ;将61h端口中数据存入al
-	and al, 11111101b  ;关断定时器通道2的门控
-    out 61h, al	;接通扬声器
-    mov cx, 10000
-again_s:
-    xor al, 2   ;触发61h端口的第一位
-    out 61h, al   ;接通扬声器
-    push cx
-    mov cx, 80
-wait1:  nop	   ;利用nop进行延时
-    loop wait1
-    pop cx
-    loop again_s
-    pop cx
+GENSOUND PROC NEAR 
+;-------------
+PUSH AX 
+PUSH BX 
+PUSH CX 
+PUSH DX 
+PUSH DI 
+;--------------
+MOV AL,0B6H 
+OUT 43H,AL 
+MOV DX,12H 
+MOV AX,348ch 
+DIV DI 
+OUT 42H,AL 
+MOV AL,AH 
+OUT 42H,AL 
+IN AL,61H 
+MOV AH,AL 
+OR AL,3 
+OUT 61H,AL
+WAIT1: MOV CX,3314 
+call waitf 
+DELAY1: DEC BX 
+JNZ WAIT1 
+MOV AL,AH 
+OUT 61H,AL
+and AL,00H     ;D1D0=PB1PB0==11 其他为不变  PB=0 表示打开扬声器只有PB0PB1同时为高电平 扬声器才能发声
+OUT 61H,AL     ;关闭发声
+;----------------
+POP DI 
+POP DX 
+POP CX 
+POP BX 
+POP AX 
+;-------------------
+RET 
+GENSOUND ENDP
+waitf proc near 
+push ax 
+waitf1: 
+in al,61h 
+and al,10h 
+cmp al,ah 
+je waitf1 
+mov ah,al 
+loop waitf1 
+pop ax 
+ret 
+waitf endp
+music PROC NEAR 
+    push bx
+    PUSH AX
+    push di
+    MOV DI, 882
+    MOV BX, 10
+    CALL GENSOUND
+    pop di
     pop ax
-    ret
-sound endp
+    pop bx
+    RET 
+MUSIC ENDP 
 
 disp_time proc near
 	push ax
@@ -445,7 +461,13 @@ return:
 	ret
 disp_time endp
 
-end_all proc near
+end_all proc near ; dx : offset msg
+    mov ax, 3
+    int 10h
+
+    mov ah, 09h
+    int 21h
+
     mov ah, 4ch
     int 21h    
     ret
