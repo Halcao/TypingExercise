@@ -20,13 +20,23 @@ putchar macro char
     pop dx
     pop ax
  endm
-	    
+
+showmsg macro msg
+    push dx
+    mov dx, offset msg
+    mov ah, 09h
+    int 21h
+    pop dx
+endm
+
 d_seg segment
     filepath db '.\article.txt', 0 ; filename
     buf db 1024 dup(0) ; file buffer
     ibuf db 1024 dup(1) ; input buffer
     err_msg db 0ah, 'cannot open file!', '$' ; error message
     bye_msg db 0ah, 'Bye!', '$'
+    ac_msg db 'Accurate rate: ', '$'
+    time_msg db 'Time: ', '$'
     handle dw ? ; file id
     number db 0
     hour db 0
@@ -64,35 +74,42 @@ start proc far
     mov dx, offset buf
     mov ah, 3fh
     int 21h ; file 255 bytes -> buf
-    jc open_error ; if failed
+    jnc open_success
+open_error:
+    ; error
+    mov dx, offset err_msg
+    call end_all
+    ret
+
+open_success:
     mov bx, ax ; actual character count
     ;mov buf[bx], '$'
-    
     mov si, 0
  another_line:
+    ;下一行
     ; clear
     mov ax, 3
     int 10h
-    push cx
-    push ax
-    push si
-    mov si, 0
-    mov cx, 40
-    mov ah, 0
-    mov second, 0
-    mov minute, 0
-    mov hour, 0
-mem_clear:
-    mov ibuf[si], ah
-    inc si
-    loop mem_clear
-    pop si
-    pop ax
-    pop cx
 
-    gotoxy 0201h
+    call print_frame
+    gotoxy 0702h
+    showmsg time_msg
+	gotoxy 0708h
+	mov al, 0 
+    mov number, al
+    call number2ascii 
+    putchar ':'
+    call number2ascii 
+    putchar ':'
+    call number2ascii 
+    mov hour, al
+    mov minute, al
+    mov second, al
+
+    gotoxy 0302h
     mov cx, 40
 output_char:
+    ; 输入当前语句
     mov dl, buf[si]
     mov ah, 2
     int 21h
@@ -111,15 +128,11 @@ close_file:
     mov bx, handle
     mov ah, 3eh
     int 21h ; close file
-;    jc end1 ; if error
-    jc open_error ; if error
+    ;jc open_error ; if error
     mov dx, offset bye_msg
     jmp end_all
-open_error:
-    mov dx, offset err_msg
-    call end_all
-    ret
-  
+;-----------------
+; 把数字转成 ascii
 number2ascii proc near ; number -> AX 
     push ax
     push bx
@@ -141,7 +154,8 @@ number2ascii proc near ; number -> AX
     pop ax
     ret
 number2ascii endp   
-
+; ------------------
+; 统计正确率
 stat proc near
     push ax
     mov al, right_count
@@ -160,11 +174,10 @@ stat proc near
     mov bx, 0
     mov cx, 40;si
 calc:
-    ;mov si, offset buf
     mov si, bx
     add si, dx
     mov al, buf[si]
-    ;mov si, offset ibuf
+
     mov si, bx
     add si, dx
     mov ah, ibuf[si]
@@ -172,9 +185,6 @@ calc:
     cmp ah, al
     jne next_loop
     inc right_count
-    ;mov al, right_count
-    ;inc al
-    ;mov right_count, al
 next_loop:
     inc si    
     loop calc
@@ -185,7 +195,8 @@ next_loop:
     pop ax
     ret
 stat endp
-
+; -------------------
+; 输出正确率统计情况
 print_count proc near
     push bx
     push ax
@@ -195,7 +206,8 @@ print_count proc near
     int 10h
     mov al, right_count
     mov number, al   
-    gotoxy 0501h
+    gotoxy 0602h
+    showmsg ac_msg
     call number2ascii
     putchar '/'
     putchar '4'
@@ -208,22 +220,27 @@ print_count proc near
     ret
 print_count endp 
     
+; ----------------
+; 处理一句输入
 input proc near
-    gotoxy 0301h
     mov cx, 40 ; times of loop
     mov bx, 0
 again:
-    mov dh, 1h
+    mov dh, 2h
     mov dl, bl
+    inc dl ;;;
     ;inc dl
     gotoxy dx
+
     putchar ' '
-    putchar 25 ; 'down'
+    putchar 25 
     putchar ' '
-    mov dh, 3h
-    mov dl, bl 
+    mov dh, 4h
+    mov dl, bl
+    inc dl
     inc dl
     gotoxy dx
+    dec dl
     call stat
     call print_count
 
@@ -240,21 +257,18 @@ key_chk:
     pop bx
     pop ax
     pop dx
+    ; 判断是否有输入
     mov ah, 01 ; check input
     int 16h
-    ;mov ah, 0bh
-    ;int 21h
-    ;cmp al, 00h
     jnz get_key
-    ;detect time
     jmp key_chk
  get_key:
-;    gotoxy 
+    ; 读取输入
     mov ah, 0
     int 16h
-    ; action key
     cmp al, esc_key
     jnz cmp_next
+    ; esc 退出 
     mov dx, offset bye_msg
     call end_all
  cmp_next:
@@ -264,7 +278,7 @@ key_chk:
     jz moveright
     cmp al, back_key
     jz delete
-    
+    ; 正常字符
     mov si, bx
     push ax
     push cx
@@ -280,24 +294,18 @@ key_chk:
     push bx
     cmp al, dl
     jnz wrongchar
+    ; 变绿
     mov bl, 0ah ; green
     jmp next
 j_again:
     jmp again
 
 wrongchar:
+    ; 错误的话变红 发出声音
     mov bl, 04h ; red color
-    call music
-;  push cx 
-;    mov cx, 0ffh
-;ring:
-;    putchar 07h
-;    loop ring
-;    pop cx
-
-    ;call alarm
-    ; ring alarm
+    call alarm
 next:
+    ; 存起来
     ;push cx ;
     mov cx, 1    
     mov ah, 09h
@@ -305,7 +313,6 @@ next:
     pop bx	  
     pop cx
     
-    ;mov ibuf[bx], al
     mov ibuf[si], al
     inc bx
 
@@ -317,7 +324,8 @@ checkleft:
     jnz moveleft
     jmp again
 moveleft:
-    mov dh, 3h
+    ; 左移
+    mov dh, 4h
     mov dl, bl
     dec dl
     dec dl
@@ -325,27 +333,23 @@ moveleft:
     gotoxy dx
     jmp again
 moveright:
-    mov dh, 3h
+    ; 右移
+    mov dh, 4h
     mov dl, bl
     inc dl
     inc bl
     gotoxy dx
     jmp again
 delete:
-    ;mov si, bx
-    ;dec si
-    ;mov ibuf[si], 0
     mov ibuf[si], 0
     dec si
-    ;mov si, bx
-    ;dec si
-
-;    call stat
-;    call print_count
     cmp bx, 0
+    ; 当前位等于0 忽略
     jz j_again
-    mov dh, 3h
+    ; 消除上一位输出
+    mov dh, 4h
     mov dl, bl
+    inc dl
     gotoxy dx
     putchar ' '
     dec dl
@@ -355,68 +359,122 @@ delete:
     ret
 input endp 
 
-GENSOUND PROC NEAR 
-;-------------
-PUSH AX 
-PUSH BX 
-PUSH CX 
-PUSH DX 
-PUSH DI 
-;--------------
-MOV AL,0B6H 
-OUT 43H,AL 
-MOV DX,12H 
-MOV AX,348ch 
-DIV DI 
-OUT 42H,AL 
-MOV AL,AH 
-OUT 42H,AL 
-IN AL,61H 
-MOV AH,AL 
-OR AL,3 
-OUT 61H,AL
-WAIT1: MOV CX,3314 
-call waitf 
-DELAY1: DEC BX 
-JNZ WAIT1 
-MOV AL,AH 
-OUT 61H,AL
-and AL,00H     ;D1D0=PB1PB0==11 其他为不变  PB=0 表示打开扬声器只有PB0PB1同时为高电平 扬声器才能发声
-OUT 61H,AL     ;关闭发声
+
 ;----------------
-POP DI 
-POP DX 
-POP CX 
-POP BX 
-POP AX 
-;-------------------
-RET 
-GENSOUND ENDP
+; 输出框架
+print_frame proc near
+	push ax
+	push cx
+	push dx
+    ;clear
+ 	mov ah, 0
+ 	mov al, 3
+ 	int 10h
+    
+    mov dh, 0
+ 	mov dl, 79
+
+	mov cx, 24
+again1:
+	inc dh
+	gotoxy dx
+	putchar '#'
+	loop again1
+
+	mov cx, 79
+again2:
+	dec dl
+	gotoxy dx
+	putchar '#'
+	loop again2
+
+	mov cx, 24
+again3:
+	dec dh
+	gotoxy dx
+	putchar '#'
+	loop again3
+
+    mov dh, 0
+ 	mov dl, 0
+ 	mov cx, 79
+again4:
+	inc dl
+	gotoxy dx
+	putchar '#'
+	loop again4
+
+	pop dx
+	pop cx
+	pop ax
+	ret
+print_frame endp
+
+; 产生声音
+; ------------------
+gensound proc near 
+    push ax 
+    push bx 
+    push cx 
+    push dx 
+    push di 
+
+    mov al,0b6h 
+    out 43h,al 
+    mov dx,12h 
+    mov ax,348ch 
+    div di 
+    out 42h,al 
+    mov al,ah 
+    out 42h,al 
+    in al,61h 
+    mov ah,al 
+    or al,3 
+    out 61h,al
+wait1: mov cx,3314 
+    call waitf 
+delay1: 
+    dec bx 
+    jnz wait1 
+    mov al,ah 
+    out 61h,al
+    and al,00h     ;d1d0=pb1pb0==11 其他为不变  pb=0 表示打开扬声器只有pb0pb1同时为高电平 扬声器才能发声
+    out 61h,al     ;关闭发声
+    pop di 
+    pop dx 
+    pop cx 
+    pop bx 
+    pop ax 
+    ret 
+gensound endp
+; --------------
 waitf proc near 
-push ax 
-waitf1: 
-in al,61h 
-and al,10h 
-cmp al,ah 
-je waitf1 
-mov ah,al 
-loop waitf1 
-pop ax 
-ret 
+    ; 延迟
+    push ax 
+    waitf1: 
+    in al,61h 
+    and al,10h 
+    cmp al,ah 
+    je waitf1 
+    mov ah,al 
+    loop waitf1 
+    pop ax 
+    ret 
 waitf endp
-music PROC NEAR 
+; --------------
+alarm proc near 
     push bx
-    PUSH AX
+    PUSH ax
     push di
-    MOV DI, 882
-    MOV BX, 10
-    CALL GENSOUND
+    MOV di, 882
+    MOV bx, 10
+    call gensound
     pop di
     pop ax
     pop bx
     RET 
-MUSIC ENDP 
-
+alarm endp 
+; --------------
 disp_time proc near
 	push ax
 	push dx
@@ -439,28 +497,44 @@ get_time:
 	mov minute, 0
     inc hour
 output_time:
-	mov dh, 06
-	mov dl, 01
+	mov dh, 07
+	mov dl, 08
 	gotoxy dx
 	mov al, hour   ;小时
     mov number, al
-    call number2ascii 
-    putchar ':'
+    call number2ascii
+    putchar ' '
 
 	mov al, minute    ;分钟
     mov number, al
     call number2ascii 
-    putchar ':'
+    putchar ' '
 
 	mov al, second     ;秒
     mov number, al
-	call number2ascii 
+	call number2ascii
+
+    mov al, second
+    and al, 01h
+    jnz odd
+    ; even
+    gotoxy 070ah
+    putchar ':'
+    gotoxy 070dh
+    putchar ':'
+    jmp return
+odd:
+    gotoxy 070ah
+    putchar ' '
+    gotoxy 070dh
+    putchar ' '
+
 return:
 	pop dx
 	pop ax
 	ret
 disp_time endp
-
+; --------------
 end_all proc near ; dx : offset msg
     mov ax, 3
     int 10h
@@ -473,6 +547,5 @@ end_all proc near ; dx : offset msg
     ret
 end_all endp
 ;start endp
-	   
 code ends
     end start 
