@@ -35,6 +35,10 @@ d_seg segment
     ibuf db 1024 dup(1) ; input buffer
     err_msg db 0ah, 'cannot open file!', '$' ; error message
     bye_msg db 0ah, 'Bye!', '$'
+    welcome_msg db 'Welcome to use the typing exericse program', '$'
+    copyright_msg1 db 'Designed by CaoHao', '$'
+    copyright_msg2 db 'Tianjin University', '$'
+    copyright_msg3 db 'School of Computer Science and Technology', '$'
     ac_msg db 'Accurate rate: ', '$'
     time_msg db 'Time: ', '$'
     handle dw ? ; file id
@@ -102,9 +106,9 @@ open_success:
     call number2ascii 
     putchar ':'
     call number2ascii 
-    mov hour, al
-    mov minute, al
-    mov second, al
+;    mov hour, al
+;    mov minute, al
+;    mov second, al
 
     gotoxy 0302h
     mov cx, 40
@@ -403,6 +407,21 @@ again4:
 	gotoxy dx
 	putchar '#'
 	loop again4
+
+    mov cx, 78
+    gotoxy 1101h
+line:
+    putchar '#'
+    loop line
+
+    gotoxy 1312h
+    showmsg welcome_msg
+    gotoxy 141ch
+    showmsg copyright_msg1
+    gotoxy 151ch
+    showmsg copyright_msg2
+    gotoxy 1612h
+    showmsg copyright_msg3
 
 	pop dx
 	pop cx
